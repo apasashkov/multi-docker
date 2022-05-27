@@ -1,0 +1,36 @@
+        1) we specify 2 upstream servers. The names are taken from the domain names
+        'client' and 'api' that docker-compose creates for each service. 
+
+upstream client {
+  server client:3000;
+}
+
+upstream api {
+  server api:5000;
+}
+
+        2) NGINX will serve as a router to route requests to 2 different servers.
+        1. if the route will be '/' then we'll route to react app
+        2. if the route will start with 'api' then we'll route to server. Notice
+        that NGINX takes /api/values/all route but routes it to /values/all. We
+        chop off the '/api' prefix with the command `rewrite /api/(.*) /$1 break;`
+
+        Here we specify 2 locations that describe where to we should proxy the
+        specified request:
+
+        location WHERE_TO {
+          proxy_pass PATH_WHERE_TO_PROXY_TO_REQUESTS
+        }
+
+server {
+  listen 80;
+
+  location / {
+    proxy_pass http://client;
+  }
+
+  location /api {
+    rewrite /api/(.*) /$1 break;
+    proxy_pass http://api;
+  }
+}
