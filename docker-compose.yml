@@ -1,61 +1,50 @@
-version: '3'
-
+version: "3"
 services:
-  nginx:
-    # we want to make sure that if api crashes nginx will always restart
-    restart: always
-    build:
-      dockerfile: Dockerfile.dev
-      context: ./nginx
-    depends_on:
-      - api
-      - client
-    ports:
-      - '3050:80'
-
-  postgres:
-    image: 'postgres:latest'
-    environment:
-      - POSTGRES_PASSWORD=postgres_password
-
-  redis:
-    image: 'redis:latest'
-
-  api:
-    build:
-      dockerfile: Dockerfile.dev
-      context: ./server
-    volumes:
-      - /app/node_modules
-      - ./server:/app
-    environment:
-      - REDIS_HOST=redis
-      # set the default redis port (see redis docs)
-      - REDIS_PORT=6379
-      # set the defaults for pg (see pg docs)
-      - PGUSER=postgres
-      - PGHOST=postgres
-      - PGDATABASE=postgres
-      - PGPASSWORD=postgres_password
-      - PGPORT=5432
-  
   client:
-    build:
-      dockerfile: Dockerfile.dev
-      context: ./client
-    volumes:
-      - /app/node_modules
-      - ./client:/app
+    image: "apasashkov/multi-client"
+    mem_limit: 128m
+    hostname: client
+  server:
+    image: "apasashkov/multi-server"
+    mem_limit: 128m
+    hostname: api
     environment:
-      - WDS_SOCKET_PORT=0
-
+      - REDIS_HOST=$REDIS_HOST
+      - REDIS_PORT=$REDIS_PORT
+      - PGUSER=$PGUSER
+      - PGHOST=$PGHOST
+      - PGDATABASE=$PGDATABASE
+      - PGPASSWORD=$PGPASSWORD
+      - PGPORT=$PGPORT
   worker:
-    build:
-      dockerfile: Dockerfile.dev
-      context: ./worker
-    volumes:
-      - /app/node_modules
-      - ./worker:/app
+    image: "apasashkov/multi-worker"
+    mem_limit: 128m
+    hostname: worker
     environment:
-      - REDIS_HOST=redis
-      - REDIS_PORT=6379
+      - REDIS_HOST=$REDIS_HOST
+      - REDIS_PORT=$REDIS_PORT
+  nginx:
+    image: "apasashkov/multi-nginx"
+    mem_limit: 128m
+    hostname: nginx
+    ports:
+      - "80:80"
+
+# we don't have postgres and redis here. We use:
+# 1) AWS Relational Database service (AWS RDS) for postgres
+# 2) AWS Elastic Cache for redis
+# Reasons: 
+# 1) EC will automatically create an instance of Redis and it's best
+# for production. 
+# 2) It's also easy to scale. If we use Redis in a  docker container
+# it's much less convenient to scale. We would have to find ways to upgrade the
+# hardware allocated to the docker machine, OR we'll have to find ways to restart
+# the service without using any data.
+# 3) It has built in logging and maintanance
+# 4) better security
+# 5) Easier to migrate off of Elastic Beanstalk with. So if we want to move
+# our app to some other service, e.g. Kubernetes cluster, some random EC2 instance,
+# we won't have the need to migrate the cache because it's completely decoupled
+# from EB 
+# 6) AWS RDS has automated backups and rollback which is important because
+# in other cases it's complex to set up (and may be a paid service)
